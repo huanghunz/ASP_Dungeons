@@ -1,37 +1,41 @@
-import p7_visualize
 import subprocess
 import json
 import collections
 import random
 import sys
+import shlex
 
-def solve(*args):
+def sovle(*args):
     """Run clingo with the provided argument list and return the parsed JSON result."""
     
     CLINGO = "./clingo"
 
-    tester = [CLINGO, "--outf=2"] + list(args)
+    command = [CLINGO, "level-core.lp", "level-style.lp", "level-sim.lp", "--outf=2"] 
 
-    print subprocess.PIPE
-    
-    # clingo = subprocess.Popen(
-    #     [CLINGO, "--outf=2"] + list(args),
-    #     stdout=subprocess.PIPE,
-    #     stderr=subprocess.PIPE)
+   
+    clingo = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE)
 
 
-    # out, err = clingo.communicate()
+    out, err = clingo.communicate()
+    if not out:
+        print "none"
+
     # if err:
     #     print err
         
-    #return parse_json_result(out)
+    return parse_json_result(out)
+
+
 
 def parse_json_result(out):
     """Parse the provided JSON text and extract a dict
     representing the predicates described in the first solver result."""
 
-    result = json.load(out)
-    
+    result = json.loads(out)
+   
     assert len(result['Call']) > 0
     assert len(result['Call'][0]['Witnesses']) > 0
     
@@ -59,10 +63,6 @@ def parse_json_result(out):
     
     return dict(preds)
 
-def solve_randomly(*args):
-    """Like solve() but uses a random sign heuristic with a random seed."""
-    args = list(args) + ["--sign-def=3","--seed="+str(random.randint(0,1<<30))]
-    return solve(*args) 
 
 def render_ascii_dungeon(design):
     """Given a dict of predicates, return an ASCII-art depiction of the a dungeon."""
@@ -73,6 +73,38 @@ def render_ascii_dungeon(design):
     glyph = dict(space='.', wall='W', altar='a', gem='g', trap='_')
     block = ''.join([''.join([glyph[sprite.get((r,c),'space')]+' ' for c in range(width)])+'\n' for r in range(width)])
     return block
+
+
+def solve_randomly(*args):
+    """Like solve() but uses a random sign heuristic with a random seed."""
+
+    args = list(args) + ["--sign-def=3","--seed="+str(random.randint(0,1<<30))]
+    return solve(*args) 
+
+def solve_shortcut_free():
+    """Like solve() but generates a shortcut free dungeon."""
+    # GRINGO = './gringo' 
+    # REIFY = "./reify"
+    # CLINGO = './clingo'
+
+    shell_command = "./gringo -c width=7 level-core.lp level-style.lp level-sim.lp level-shortcuts.lp | ./reify | \
+                    ./clingo --parallel-mode=4 --outf=2 - meta.lp metaD.lp metaO.lp metaS.lp "
+
+    gringo = subprocess.Popen(
+        shell_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,shell=True)
+
+    out, err = gringo.communicate()
+
+    if err:
+        print err
+        #return None
+
+    return parse_json_result(out)
+
+
+
 
 def render_ascii_touch(design, target):
     """Given a dict of predicates, return an ASCII-art depiction where the player explored
@@ -96,9 +128,22 @@ def side_by_side(*blocks):
     return '\n'.join(lines)
 
 if __name__ == '__main__':
-    args = ["level-core.lp", "level-style.lp", "level=sim.lp" ]
-    
-    solve(args)
+    defult_args = "level-core.lp,level-style.lp,level-sim.lp" 
+
+    #from optparse import OptionParser
+
+    #USAGE = "uage: %prog "
+            #-r, --random:\tsolve dungeon with random heuristic\n\
+
+
+    #parser = OptionParser(usage=USAGE)
+    #parser.add_option("-r", "--random", dest="random", action="store_true", default=False)
+    #parser.add_option("-n", "--noshortcut", dest="noshortcut", action="store_true", default=False)
+
+    design =  solve_shortcut_free()
+   
+
+    print side_by_side(render_ascii_dungeon(design), *[render_ascii_touch(design,i) for i in range(1,4)])
 
     print "Done"
 
